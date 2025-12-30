@@ -5,6 +5,43 @@ import (
 	"fmt"
 )
 
+const (
+	addTaskQuery = `
+		INSERT INTO scheduler (date, title, comment, repeat)
+		VALUES (?, ?, ?, ?)
+	`
+
+	getTaskQuery = `
+		SELECT id, date, title, comment, repeat
+		FROM scheduler
+		WHERE id = ?
+	`
+
+	tasksQuery = `
+		SELECT id, date, title, comment, repeat
+		FROM scheduler
+		ORDER BY date
+		LIMIT ?
+	`
+
+	updateTaskQuery = `
+		UPDATE scheduler
+		SET date = ?, title = ?, comment = ?, repeat = ?
+		WHERE id = ?
+	`
+
+	updateDateQuery = `
+		UPDATE scheduler
+		SET date = ?
+		WHERE id = ?
+	`
+
+	deleteTaskQuery = `
+		DELETE FROM scheduler
+		WHERE id = ?
+	`
+)
+
 type Task struct {
 	ID      string `json:"id"`
 	Date    string `json:"date"`
@@ -14,31 +51,25 @@ type Task struct {
 }
 
 func AddTask(task *Task) (int64, error) {
-	var id int64
 	// определите запрос
-	query := `
-		INSERT INTO scheduler (date, title, comment, repeat)
-		VALUES (:date, :title, :comment, :repeat)
-	`
-
-	res, err := db.Exec(query,
+	res, err := db.Exec(addTaskQuery,
 		sql.Named("date", task.Date),
 		sql.Named("title", task.Title),
 		sql.Named("comment", task.Comment),
 		sql.Named("repeat", task.Repeat))
-	if err == nil {
-		id, err = res.LastInsertId()
+	
+	if err != nil {
+		return 0, err
+	}
+	id, err := res.LastInsertId()
+	if err != nil {
+		return 0, err
 	}
 	return id, err
 }
 
 func Tasks(limit int) ([]*Task, error) {
-	rows, err := db.Query(`
-		SELECT id, date, title, comment, repeat
-		FROM scheduler
-		ORDER BY date
-		LIMIT ?
-	`, limit)
+	rows, err := db.Query(tasksQuery, limit)
 	if err != nil {
 		return nil, err
 	}
@@ -70,15 +101,8 @@ func Tasks(limit int) ([]*Task, error) {
 
 func GetTask(id string) (*Task, error) {
 	var task Task
-
-	query := `
-		SELECT id, date, title, comment, repeat
-		FROM scheduler
-		WHERE id = :id
-	`
-
 	err := db.QueryRow(
-		query,
+		getTaskQuery,
 		sql.Named("id", id),
 	).Scan(
 		&task.ID,
@@ -97,16 +121,7 @@ func GetTask(id string) (*Task, error) {
 
 func UpdateTask(task *Task) error {
 	// параметры пропущены, не забудьте указать WHERE
-	query := `
-		UPDATE scheduler
-		SET date = :date,
-		    title = :title,
-		    comment = :comment,
-		    repeat = :repeat
-		WHERE id = :id
-	`
-
-	res, err := db.Exec(query,
+	res, err := db.Exec(updateDateQuery,
 		sql.Named("date", task.Date),
 		sql.Named("title", task.Title),
 		sql.Named("comment", task.Comment),
@@ -129,10 +144,7 @@ func UpdateTask(task *Task) error {
 }
 
 func DeleteTask(id string) error {
-	res, err := db.Exec(
-		`DELETE FROM scheduler WHERE id = ?`,
-		id,
-	)
+	res, err := db.Exec(deleteTaskQuery, id, sql.Named("id", id))
 	if err != nil {
 		return err
 	}
@@ -149,8 +161,7 @@ func DeleteTask(id string) error {
 
 func UpdateDate(next string, id string) error {
 	res, err := db.Exec(
-		`UPDATE scheduler SET date = ? WHERE id = ?`,
-		next,
+		updateDateQuery,
 		id,
 	)
 	if err != nil {
